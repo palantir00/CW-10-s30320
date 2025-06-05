@@ -5,236 +5,116 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using CW_10_s30320.Data;
-using CW_10_s30320.Controllers;
-using CW_10_s30320.Models;
-using CW_10_s30320.DTOs;
+using CW_10_s30320.Controllers;    
+using CW_10_s30320.Data;           
+using CW_10_s30320.Models;         
+using CW_10_s30320.DTOs;           
 namespace CW_10_s30320.Tests
 {
    public class TripsControllerTests
    {
-       private DbContextOptions<MasterContext> CreateNewContextOptions()
+       private MasterContext GetInMemoryContext(string dbName)
        {
-           return new DbContextOptionsBuilder<MasterContext>()
-               .UseInMemoryDatabase(Guid.NewGuid().ToString())
+           var options = new DbContextOptionsBuilder<MasterContext>()
+               .UseInMemoryDatabase(databaseName: dbName)
                .Options;
+           var context = new MasterContext(options);
+
+           context.Trips.Add(new Trip { Id = 1, Destination = "Wrocław", Price = 1000 });
+           context.SaveChanges();
+           return context;
        }
-       [Fact(DisplayName = "Delete Trip with assigned clients → 400 BadRequest")]
-       public async Task Delete_Trip_With_Clients_Returns_BadRequest()
+       [Fact]
+       public async Task GetTrip_ExistingId_ShouldReturnOkAndTrip()
        {
-           var options = CreateNewContextOptions();
-           using (var context = new MasterContext(options))
-           {
-               var trip = new Trip
-               {
-                   Name = "Test Trip",
-                   Description = "Desc",
-                   DateFrom = DateTime.UtcNow.AddDays(10),
-                   DateTo = DateTime.UtcNow.AddDays(15),
-                   MaxPeople = 20
-               };
-               context.Trips.Add(trip);
-               context.SaveChanges();
-               var client = new Client
-               {
-                   Pesel = "12345678901",
-                   FirstName = "Jan",
-                   LastName = "Kowalski",
-                   Email = "jan@example.com",
-                   Telephone = "123456789"
-               };
-               context.Clients.Add(client);
-               context.SaveChanges();
-               var clientTrip = new Client_Trip
-               {
-                   IdTrip = trip.IdTrip,
-                   IdClient = client.IdClient,
-                   RegistrationDate = DateTime.UtcNow,
-                   PaymentDate = null
-               };
-               context.Client_Trips.Add(clientTrip);
-               context.SaveChanges();
-           }
-           using (var context = new MasterContext(options))
-           {
-               var controller = new TripsController(context);
-               var result = await controller.Delete(1);
-               result.Should().BeOfType<BadRequestObjectResult>();
-               var badReq = (BadRequestObjectResult)result;
-               badReq.Value.ToString().Should().ContainEquivalentOf("przypisani klienci");
-           }
+           var db = GetInMemoryContext("GetTripTestDb");
+           var controller = new TripsController(db);
+
+           var actionResult = await controller.GetTrip(1);
+           var okResult = actionResult as OkObjectResult;
+           okResult.Should().NotBeNull();
+           var trip = okResult.Value as Trip;
+           trip.Should().NotBeNull();
+           trip.Id.Should().Be(1);
+           trip.Destination.Should().Be("Wrocław");
        }
-       [Fact(DisplayName = "Delete Trip without any clients → 200 OK")]
-       public async Task Delete_Trip_Without_Clients_Returns_Ok()
+       [Fact]
+       public async Task GetTrip_NonExistingId_ShouldReturnNotFound()
        {
-           var options = CreateNewContextOptions();
-           using (var context = new MasterContext(options))
-           {
-               var trip = new Trip
-               {
-                   Name = "Solo Trip",
-                   Description = "No clients here",
-                   DateFrom = DateTime.UtcNow.AddDays(5),
-                   DateTo = DateTime.UtcNow.AddDays(7),
-                   MaxPeople = 10
-               };
-               context.Trips.Add(trip);
-               context.SaveChanges();
-           }
-           using (var context = new MasterContext(options))
-           {
-               var controller = new TripsController(context);
-               var result = await controller.Delete(1);
-               result.Should().BeOfType<OkResult>();
-               context.Trips.Any(t => t.IdTrip == 1).Should().BeFalse();
-           }
+  
+           var db = GetInMemoryContext("GetTripNotFoundDb");
+           var controller = new TripsController(db);
+
+           var actionResult = await controller.GetTrip(999);
+           var notFoundResult = actionResult as NotFoundResult;
+           notFoundResult.Should().NotBeNull();
        }
-       [Fact(DisplayName = "Delete Non-Existing Trip → 404 NotFound")]
-       public async Task Delete_NonExisting_Trip_Returns_NotFound()
+       [Fact]
+       public async Task DeleteTrip_ExistingId_ShouldReturnNoContent()
        {
-           var options = CreateNewContextOptions();
-           using (var context = new MasterContext(options))
-           {
-               // brak tripów w bazie
-           }
-           using (var context = new MasterContext(options))
-           {
-               var controller = new TripsController(context);
-               var result = await controller.Delete(42);
-               result.Should().BeOfType<NotFoundResult>();
-           }
+
+           var db = GetInMemoryContext("DeleteTripTestDb");
+           var controller = new TripsController(db);
+
+           var actionResult = await controller.Delete(1);
+           var noContent = actionResult as NoContentResult;
+           noContent.Should().NotBeNull();
+
+           db.Trips.Any(t => t.Id == 1).Should().BeFalse();
        }
-       [Fact(DisplayName = "AddClientToTrip: duplicate PESEL in same trip → 400 BadRequest")]
-       public async Task AddClientToTrip_Duplicate_Pesel_Returns_BadRequest()
+       [Fact]
+       public async Task DeleteTrip_NonExistingId_ShouldReturnBadRequest()
        {
-           var options = CreateNewContextOptions();
-           using (var context = new MasterContext(options))
-           {
-               var trip = new Trip
-               {
-                   Name = "TripDupPesel",
-                   Description = "Future trip",
-                   DateFrom = DateTime.UtcNow.AddDays(2),
-                   DateTo = DateTime.UtcNow.AddDays(4),
-                   MaxPeople = 5
-               };
-               context.Trips.Add(trip);
-               context.SaveChanges();
-               var client = new Client
-               {
-                   Pesel = "98765432100",
-                   FirstName = "Anna",
-                   LastName = "Nowak",
-                   Email = "anna@foo.com",
-                   Telephone = "555444333"
-               };
-               context.Clients.Add(client);
-               context.SaveChanges();
-               var clientTrip = new Client_Trip
-               {
-                   IdTrip = trip.IdTrip,
-                   IdClient = client.IdClient,
-                   RegistrationDate = DateTime.UtcNow,
-                   PaymentDate = null
-               };
-               context.Client_Trips.Add(clientTrip);
-               context.SaveChanges();
-           }
-           using (var context = new MasterContext(options))
-           {
-               var controller = new TripsController(context);
-               var dto = new CreateClientInTripDto
-               {
-                   Pesel = "98765432100",
-                   FirstName = "Anna",
-                   LastName = "Nowak",
-                   Email = "anna@foo.com",
-                   Telephone = "555444333",
-                   RegistrationDate = DateTime.UtcNow,
-                   PaymentDate = null
-               };
-               var result = await controller.AddClientToTrip(1, dto);
-               result.Should().BeOfType<BadRequestObjectResult>();
-               var badReq = (BadRequestObjectResult)result;
-               badReq.Value.ToString().Should().ContainEquivalentOf("duplikat");
-           }
+
+           var db = GetInMemoryContext("DeleteTripBadRequestDb");
+           var controller = new TripsController(db);
+
+           var actionResult = await controller.Delete(12345);
+
+           var badRequest = actionResult as BadRequestObjectResult;
+           badRequest.Should().NotBeNull();
+
+           var msg = badRequest.Value.ToString().ToLower();
+           msg.Should().Contain("not found");
        }
-       [Fact(DisplayName = "AddClientToTrip: trip date in past → 400 BadRequest")]
-       public async Task AddClientToTrip_TripInPast_Returns_BadRequest()
+       [Fact]
+       public async Task CreateTrip_InvalidModel_ShouldReturnBadRequest()
        {
-           var options = CreateNewContextOptions();
-           using (var context = new MasterContext(options))
+
+           var db = GetInMemoryContext("CreateTripInvalidDb");
+           var controller = new TripsController(db);
+
+           var invalidDto = new CreateTripDto
            {
-               var trip = new Trip
-               {
-                   Name = "PastTrip",
-                   Description = "Already happened",
-                   DateFrom = DateTime.UtcNow.AddDays(-10),
-                   DateTo = DateTime.UtcNow.AddDays(-5),
-                   MaxPeople = 3
-               };
-               context.Trips.Add(trip);
-               context.SaveChanges();
-           }
-           using (var context = new MasterContext(options))
-           {
-               var controller = new TripsController(context);
-               var dto = new CreateClientInTripDto
-               {
-                   Pesel = "11223344556",
-                   FirstName = "Piotr",
-                   LastName = "Zalewski",
-                   Email = "piotr@bar.com",
-                   Telephone = "111222333",
-                   RegistrationDate = DateTime.UtcNow,
-                   PaymentDate = null
-               };
-               var result = await controller.AddClientToTrip(1, dto);
-               result.Should().BeOfType<BadRequestObjectResult>();
-               var badReq = (BadRequestObjectResult)result;
-               badReq.Value.ToString().Should().ContainEquivalentOf("wycieczka już się odbyła");
-           }
+               Destination = "",    
+               Price = -100         
+           };
+
+           var actionResult = await controller.Create(invalidDto);
+           var badRequest = actionResult as BadRequestObjectResult;
+           badRequest.Should().NotBeNull();
+           var msg = badRequest.Value.ToString().ToLower();
+           msg.Should().Contain("invalid");
        }
-       [Fact(DisplayName = "AddClientToTrip: new client → 200 OK")]
-       public async Task AddClientToTrip_NewClient_Succeeds_Returns_Ok()
+       [Fact]
+       public async Task CreateTrip_ValidModel_ShouldReturnCreated()
        {
-           var options = CreateNewContextOptions();
-           using (var context = new MasterContext(options))
+
+           var db = GetInMemoryContext("CreateTripValidDb");
+           var controller = new TripsController(db);
+           var validDto = new CreateTripDto
            {
-               var trip = new Trip
-               {
-                   Name = "NoClientsTrip",
-                   Description = "Can add",
-                   DateFrom = DateTime.UtcNow.AddDays(3),
-                   DateTo = DateTime.UtcNow.AddDays(6),
-                   MaxPeople = 5
-               };
-               context.Trips.Add(trip);
-               context.SaveChanges();
-           }
-           using (var context = new MasterContext(options))
-           {
-               var controller = new TripsController(context);
-               var dto = new CreateClientInTripDto
-               {
-                   Pesel = "55566677788",
-                   FirstName = "Marek",
-                   LastName = "Kowal",
-                   Email = "marek@baz.com",
-                   Telephone = "987654321",
-                   RegistrationDate = DateTime.UtcNow,
-                   PaymentDate = null
-               };
-               var result = await controller.AddClientToTrip(1, dto);
-               result.Should().BeOfType<OkResult>();
-               var createdClient = context.Clients.SingleOrDefault(c => c.Pesel == "55566677788");
-               createdClient.Should().NotBeNull();
-               var clientTrip = context.Client_Trips
-                   .SingleOrDefault(ct => ct.IdTrip == 1 && ct.IdClient == createdClient!.IdClient);
-               clientTrip.Should().NotBeNull();
-               clientTrip!.RegistrationDate.Should().Be(dto.RegistrationDate);
-               clientTrip.PaymentDate.Should().BeNull();
-           }
+               Destination = "Warszawa",
+               Price = 2500
+           };
+
+           var actionResult = await controller.Create(validDto);
+           var createdResult = actionResult as CreatedAtActionResult;
+           createdResult.Should().NotBeNull();
+           var createdTrip = createdResult.Value as Trip;
+           createdTrip.Should().NotBeNull();
+           createdTrip.Id.Should().BeGreaterThan(0);
+           createdTrip.Destination.Should().Be("Warszawa");
        }
    }
 }
