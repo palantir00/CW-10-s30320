@@ -61,7 +61,6 @@ namespace CW_10_s30320.Tests
                var result = await controller.Delete(1);
                result.Should().BeOfType<BadRequestObjectResult>();
                var badReq = (BadRequestObjectResult)result;
-               // używamy ContainEquivalentOf zamiast StringComparison
                badReq.Value.ToString().Should().ContainEquivalentOf("przypisani klienci");
            }
        }

@@ -40,16 +40,13 @@ namespace CW_10_s30320.Controllers
                return NotFound();
            if (trip.DateFrom < DateTime.UtcNow)
                return BadRequest("Nie można zapisać, ponieważ wycieczka już się odbyła.");
-           // poszukujemy, czy klient o danym peselu już istnieje
            var existingClient = await _context.Clients.SingleOrDefaultAsync(c => c.Pesel == dto.Pesel);
            if (existingClient != null)
            {
-               // sprawdzamy, czy klient jest już przypisany do tej wycieczki
                bool already = await _context.Client_Trips.AnyAsync(ct =>
                    ct.IdTrip == tripId && ct.IdClient == existingClient.IdClient);
                if (already)
                    return BadRequest("Duplikat: klient o takim PESELu jest już zapisany na tę wycieczkę.");
-               // w przeciwnym razie przypisujemy go
                var clientTrip = new Client_Trip
                {
                    IdTrip = tripId,
@@ -63,7 +60,6 @@ namespace CW_10_s30320.Controllers
            }
            else
            {
-               // tworzymy nowego klienta i przypisujemy
                var newClient = new Client
                {
                    Pesel = dto.Pesel,

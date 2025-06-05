@@ -8,7 +8,7 @@
        public string LastName { get; set; } = default!;
        public string Email { get; set; } = default!;
        public string Telephone { get; set; } = default!;
-       // testy korzystają z tego pola:
+       
        public List<int> TripIds { get; set; } = new List<int>();
    }
 }
