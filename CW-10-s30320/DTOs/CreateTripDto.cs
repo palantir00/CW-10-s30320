@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace CW_10_s30320.DTOs
@@ -9,10 +8,7 @@ namespace CW_10_s30320.DTOs
         [Required] public string Name { get; set; } = null!;
         [Required] public string Description { get; set; } = null!;
         [Required] public DateTime DateFrom { get; set; }
-        [Required] public DateTime DateTo { get; set; }
-        [Range(1, int.MaxValue)]
-        public int MaxPeople { get; set; }
-
-        public List<int> IdCountries { get; set; } = new();
+        [Required] public DateTime DateTo   { get; set; }
+        [Required] public int MaxPeople     { get; set; }
     }
 }
