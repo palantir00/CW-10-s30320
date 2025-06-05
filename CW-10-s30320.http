@@ -1,0 +1,17 @@
+﻿GET http://localhost:5246/api/trips?pageNum=1&pageSize=10
+Accept: application/json
+
+DELETE http://localhost:5246/api/clients/5
+Accept: application/json
+
+POST http://localhost:5246/api/trips/2/clients
+Content-Type: application/json
+
+{
+  "FirstName": "Anna",
+  "LastName": "Kowalska",
+  "Email": "anna.k@example.com",
+  "Telephone": "+48 123 456 789",
+  "Pesel": "90010112345",
+  "PaymentDate": "2025-06-05T00:00:00"
+}
